@@ -6,6 +6,9 @@ extend Puppet::Acceptance::TempFileUtils
 initialize_temp_dirs
 
 test_name "certificate extensions available as trusted data" do
+
+  skip_test 'Expected to fail against jvm-puppet until CA work progresses (PE-3174, PE-4309)'
+
   teardown do
     reset_agent_ssl
   end
