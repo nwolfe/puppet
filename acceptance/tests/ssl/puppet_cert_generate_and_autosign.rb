@@ -3,6 +3,8 @@ extend Puppet::Acceptance::CAUtils
 
 test_name "Puppet cert generate behavior (#6112)" do
 
+  skip_test 'Expected to fail against jvm-puppet until CA work progresses (PE-3174, PE-4309)'
+
   # This acceptance test documents the behavior of `puppet cert generate` calls
   # for three cases:
   #
