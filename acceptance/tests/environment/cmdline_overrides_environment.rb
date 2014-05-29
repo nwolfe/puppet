@@ -1,5 +1,7 @@
 test_name "Commandline modulepath and manifest settings override environment"
 
+confine :except, :jvmpuppet => 'not-applicable'
+
 testdir = master.tmpdir('cmdline_and_environment')
 environmentpath = "#{testdir}/environments"
 modulepath = "#{testdir}/modules"
