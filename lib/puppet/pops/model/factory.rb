@@ -146,6 +146,11 @@ class Puppet::Pops::Model::Factory
     o
   end
 
+  def build_ReservedWord(o, name)
+    o.word = name
+    o
+  end
+
   def build_KeyedEntry(o, k, v)
     o.key = to_ops(k)
     o.value = to_ops(v)
@@ -369,6 +374,8 @@ class Puppet::Pops::Model::Factory
 
   def minus();  f_build_unary(Model::UnaryMinusExpression, self);         end
 
+  def unfold(); f_build_unary(Model::UnfoldExpression, self);             end
+
   def text();   f_build_unary(Model::TextExpression, self);               end
 
   def var();    f_build_unary(Model::VariableExpression, self);           end
@@ -511,6 +518,8 @@ class Puppet::Pops::Model::Factory
 
   def self.minus(o);                     new(o).minus;                                           end
 
+  def self.unfold(o);                    new(o).unfold;                                          end
+
   def self.var(o);                       new(o).var;                                             end
 
   def self.block(*args);                 new(Model::BlockExpression, *args);                     end
@@ -539,7 +548,6 @@ class Puppet::Pops::Model::Factory
 
   def self.HASH(entries);                new(Model::LiteralHash, *entries);                      end
 
-  # TODO_HEREDOC
   def self.HEREDOC(name, expr);          new(Model::HeredocExpression, name, expr);              end
 
   def self.SUBLOCATE(token, expr)        new(Model::SubLocatedExpression, token, expr);          end
@@ -549,6 +557,19 @@ class Puppet::Pops::Model::Factory
   def self.PARAM(name, expr=nil);        new(Model::Parameter, name, expr);                      end
 
   def self.NODE(hosts, parent, body);    new(Model::NodeDefinition, hosts, parent, body);        end
+
+
+  # Parameters
+
+  # Mark parameter as capturing the rest of arguments
+  def captures_rest()
+    current.captures_rest = true
+  end
+
+  # Set Expression that should evaluate to the parameter's type
+  def type_expr(o)
+    current.type_expr = to_ops(o)
+  end
 
   # Creates a QualifiedName representation of o, unless o already represents a QualifiedName in which
   # case it is returned.
@@ -582,13 +603,18 @@ class Puppet::Pops::Model::Factory
   end
 
   def self.EPP(parameters, body)
-    see_scope = false
-    params = parameters
     if parameters.nil?
       params = []
-      see_scope = true
+      parameters_specified = false
+    else
+      params = parameters
+      parameters_specified = true
     end
-    LAMBDA(params, new(Model::EppExpression, see_scope, body))
+    LAMBDA(params, new(Model::EppExpression, parameters_specified, body))
+  end
+
+  def self.RESERVED(name)
+    new(Model::ReservedWord, name)
   end
 
   # TODO: This is the same a fqn factory method, don't know if callers to fqn and QNAME can live with the
@@ -712,6 +738,7 @@ class Puppet::Pops::Model::Factory
     'realize' => true,
     'include' => true,
     'contain' => true,
+    'tag'     => true,
 
     'debug'   => true,
     'info'    => true,
@@ -764,7 +791,6 @@ class Puppet::Pops::Model::Factory
   # @param left [Factory, Expression] the lhs followed what may be a hash
   def self.transform_resource_wo_title(left, attribute_ops)
     return nil unless attribute_ops.is_a? Array
-#    return nil if attribute_ops.find { |ao| ao.operator == :'+>' }
     keyed_entries = attribute_ops.map do |ao|
       return nil if ao.operator == :'+>'
       KEY_ENTRY(ao.attribute_name, ao.value_expr)
@@ -819,8 +845,8 @@ class Puppet::Pops::Model::Factory
     x
   end
 
-  def build_EppExpression(o, see_scope, body)
-    o.see_scope = see_scope
+  def build_EppExpression(o, parameters_specified, body)
+    o.parameters_specified = parameters_specified
     b = f_build_body(body)
     o.body = b.current if b
     o

@@ -24,7 +24,7 @@ class Puppet::Pops::Types::TypeParser
   #
   # @param string [String] a string with the type expressed in stringified form as produced by the 
   #   {Puppet::Pops::Types::TypeCalculator#string TypeCalculator#string} method.
-  # @return [Puppet::Pops::Types::PObjectType] a specialization of the PObjectType representing the type.
+  # @return [Puppet::Pops::Types::PAnyType] a specialization of the PAnyType representing the type.
   #
   # @api public
   #
@@ -73,6 +73,10 @@ class Puppet::Pops::Types::TypeParser
 
   # @api private
   def interpret_LiteralString(o)
+    o.value
+  end
+
+  def interpret_LiteralRegularExpression(o)
     o.value
   end
 
@@ -160,8 +164,8 @@ class Puppet::Pops::Types::TypeParser
       # Should not be interpreted as Resource type
       TYPES.undef()
 
-    when "object"
-      TYPES.object()
+    when "any"
+      TYPES.any()
 
     when "variant"
       TYPES.variant()
@@ -297,22 +301,22 @@ class Puppet::Pops::Types::TypeParser
 
     when "enum"
       # 1..m parameters being strings
-      raise_invalid_parameters_error("Enum", "1 or more", parameters.size) unless parameters.size > 1
+      raise_invalid_parameters_error("Enum", "1 or more", parameters.size) unless parameters.size >= 1
       TYPES.enum(*parameters)
 
     when "pattern"
       # 1..m parameters being strings or regular expressions
-      raise_invalid_parameters_error("Pattern", "1 or more", parameters.size) unless parameters.size > 1
+      raise_invalid_parameters_error("Pattern", "1 or more", parameters.size) unless parameters.size >= 1
       TYPES.pattern(*parameters)
 
     when "variant"
       # 1..m parameters being strings or regular expressions
-      raise_invalid_parameters_error("Variant", "1 or more", parameters.size) unless parameters.size > 1
+      raise_invalid_parameters_error("Variant", "1 or more", parameters.size) unless parameters.size >= 1
       TYPES.variant(*parameters)
 
     when "tuple"
       # 1..m parameters being types (last two optionally integer or literal default
-      raise_invalid_parameters_error("Tuple", "1 or more", parameters.size) unless parameters.size > 1
+      raise_invalid_parameters_error("Tuple", "1 or more", parameters.size) unless parameters.size >= 1
       length = parameters.size
       if TYPES.is_range_parameter?(parameters[-2])
         # min, max specification
@@ -400,7 +404,7 @@ class Puppet::Pops::Types::TypeParser
       assert_type(parameters[0])
       TYPES.optional(parameters[0])
 
-    when "object", "data", "catalogentry", "boolean", "scalar", "undef", "numeric"
+    when "any", "data", "catalogentry", "boolean", "scalar", "undef", "numeric"
       raise_unparameterized_type_error(parameterized_ast.left_expr)
 
     when "type"
@@ -427,7 +431,7 @@ class Puppet::Pops::Types::TypeParser
   private
 
   def assert_type(t)
-    raise_invalid_type_specification_error unless t.is_a?(Puppet::Pops::Types::PObjectType)
+    raise_invalid_type_specification_error unless t.is_a?(Puppet::Pops::Types::PAnyType)
     true
   end
 

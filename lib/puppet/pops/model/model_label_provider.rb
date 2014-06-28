@@ -50,6 +50,7 @@ class Puppet::Pops::Model::ModelLabelProvider < Puppet::Pops::LabelProvider
   def label_VariableExpression o          ; "Variable"                          end
   def label_TextExpression o              ; "Expression in Interpolated String" end
   def label_UnaryMinusExpression o        ; "Unary Minus"                       end
+  def label_UnfoldExpression o            ; "Unfold"                            end
   def label_BlockExpression o             ; "Block Expression"                  end
   def label_ConcatenatedString o          ; "Double Quoted String"              end
   def label_HeredocExpression o           ; "'@(#{o.syntax})' expression"       end
@@ -84,6 +85,7 @@ class Puppet::Pops::Model::ModelLabelProvider < Puppet::Pops::LabelProvider
   def label_QualifiedName o               ; "Name"                              end
   def label_QualifiedReference o          ; "Type-Name"                         end
   def label_PAbstractType o               ; "#{Puppet::Pops::Types::TypeCalculator.string(o)}-Type" end
+  def label_ReservedWord o                ; "Reserved Word '#{o.word}'"         end
 
   def label_PResourceType o
     if o.title

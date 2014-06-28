@@ -572,18 +572,23 @@ module Puppet
       defaultto false
     end
 
-    def eval_generate
+    def generate
       return [] if self[:purge_ssh_keys].empty?
       find_unmanaged_keys
     end
 
     newparam(:purge_ssh_keys) do
-      desc "Purge ssh keys authorized for the user
-            if they are not managed via ssh_authorized_keys. When true,
-            looks for keys in .ssh/authorized_keys in the user's home
-            directory. Possible values are true, false, or an array of
-            paths to file to search for authorized keys. If a path starts
-            with ~ or %h, this token is replaced with the user's home directory."
+      desc "Whether to purge authorized SSH keys for this user if they are not managed
+        with the `ssh_authorized_key` resource type. Allowed values are:
+
+        * `false` (default) --- don't purge SSH keys for this user.
+        * `true` --- look for keys in the `.ssh/authorized_keys` file in the user's
+          home directory. Purge any keys that aren't managed as `ssh_authorized_key`
+          resources.
+        * An array of file paths --- look for keys in all of the files listed. Purge
+          any keys that aren't managed as `ssh_authorized_key` resources. If any of
+          these paths starts with `~` or `%h`, that token will be replaced with
+          the user's home directory."
 
       defaultto :false
 
@@ -639,7 +644,7 @@ module Puppet
     #
     # @return [Array<Puppet::Type::Ssh_authorized_key] a list of resources
     #   representing the found keys
-    # @see eval_generate
+    # @see generate
     # @api private
     def find_unmanaged_keys
       self[:purge_ssh_keys].
@@ -647,6 +652,7 @@ module Puppet
         map { |f| unknown_keys_in_file(f) }.
         flatten.each do |res|
           res[:ensure] = :absent
+          res[:user] = self[:name]
           @parameters.each do |name, param|
             res[name] = param.value if param.metaparam?
           end
@@ -657,7 +663,7 @@ module Puppet
     # on the keys. These are considered names of possible ssh_authorized_keys
     # resources. Keys that are managed by the present catalog are ignored.
     #
-    # @see eval_generate
+    # @see generate
     # @api private
     # @return [Array<Puppet::Type::Ssh_authorized_key] a list of resources
     #   representing the found keys

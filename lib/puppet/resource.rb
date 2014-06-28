@@ -186,6 +186,9 @@ class Puppet::Resource
     @is_stage ||= @type.to_s.downcase == "stage"
   end
 
+  # Cache to reduce respond_to? lookups
+  @@nondeprecating_type = {}
+
   # Create our resource.
   def initialize(type, title = nil, attributes = {})
     @parameters = {}
@@ -207,6 +210,14 @@ class Puppet::Resource
 
     if params = attributes[:parameters]
       extract_parameters(params)
+    end
+
+    if resource_type and ! @@nondeprecating_type[resource_type]
+      if resource_type.respond_to?(:deprecate_params)
+        resource_type.deprecate_params(title, attributes[:parameters])
+      else
+        @@nondeprecating_type[resource_type] = true
+      end
     end
 
     tag(self.type)
@@ -407,15 +418,23 @@ class Puppet::Resource
         end
       end
 
-      # If the value is an array with only one value, then
-      # convert it to a single value.  This is largely so that
-      # the database interaction doesn't have to worry about
-      # whether it returns an array or a string.
-      result[p] = if v.is_a?(Array) and v.length == 1
-                    v[0]
-                  else
-                    v
-                  end
+      if Puppet[:parser] == 'current'
+        # If the value is an array with only one value, then
+        # convert it to a single value.  This is largely so that
+        # the database interaction doesn't have to worry about
+        # whether it returns an array or a string.
+        #
+        # This behavior is not done in the future parser, but we can't issue a
+        # deprecation warning either since there isn't anything that a user can
+        # do about it.
+        result[p] = if v.is_a?(Array) and v.length == 1
+                      v[0]
+                    else
+                      v
+                    end
+      else
+        result[p] = v
+      end
     end
 
     result
@@ -435,6 +454,21 @@ class Puppet::Resource
     resource_type.arguments.each do |param, default|
       param = param.to_sym
       fail Puppet::ParseError, "Must pass #{param} to #{self}" unless parameters.include?(param)
+    end
+
+    # Perform optional type checking
+    if Puppet[:parser] == 'future'
+      # Perform type checking
+      arg_types = resource_type.argument_types
+      # Parameters is a map from name, to parameter, and the parameter again has name and value
+      parameters.each do |name, value|
+        next unless t = arg_types[name.to_s]  # untyped, and parameters are symbols here (aargh, strings in the type)
+        unless Puppet::Pops::Types::TypeCalculator.instance?(t, value.value)
+          inferred_type = Puppet::Pops::Types::TypeCalculator.infer(value.value)
+          actual = Puppet::Pops::Types::TypeCalculator.generalize!(inferred_type)
+          fail Puppet::ParseError, "Expected parameter '#{name}' of '#{self}' to have type #{t.to_s}, got #{actual.to_s}"
+        end
+      end
     end
   end
 

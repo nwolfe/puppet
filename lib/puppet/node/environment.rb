@@ -432,11 +432,9 @@ class Puppet::Node::Environment
   # This call does nothing unless files are being watched.
   #
   def check_for_reparse
-    if watching?
-      if (Puppet[:code] != @parsed_code) || (@known_resource_types && @known_resource_types.require_reparse?)
-        @parsed_code = nil
-        @known_resource_types = nil
-      end
+    if (Puppet[:code] != @parsed_code) || (watching? && @known_resource_types && @known_resource_types.require_reparse?)
+      @parsed_code = nil
+      @known_resource_types = nil
     end
   end
 
@@ -478,6 +476,8 @@ class Puppet::Node::Environment
       self.full_modulepath == other.full_modulepath &&
       self.manifest == other.manifest
   end
+
+  alias eql? ==
 
   def hash
     [self.class, name, full_modulepath, manifest].hash

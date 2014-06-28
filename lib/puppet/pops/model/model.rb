@@ -93,6 +93,9 @@ module Puppet::Pops::Model
   #
   class UnaryMinusExpression < UnaryExpression; end
 
+  # Unfolds an array (a.k.a 'splat')
+  class UnfoldExpression < UnaryExpression; end
+
   # An assignment expression assigns a value to the lval() of the left_expr.
   #
   class AssignmentExpression < BinaryExpression
@@ -231,6 +234,8 @@ module Puppet::Pops::Model
   class Parameter < Positioned
     has_attr 'name', String, :lowerBound => 1
     contains_one_uni 'value', Expression
+    contains_one_uni 'type_expr', Expression, :lowerBound => 0
+    has_attr 'captures_rest', Boolean
   end
 
   # Abstract base class for definitions.
@@ -485,6 +490,11 @@ module Puppet::Pops::Model
     has_attr 'value', String, :lowerBound => 1
   end
 
+  # Represents a parsed reserved word
+  class ReservedWord < LiteralValue
+    has_attr 'word', String, :lowerBound => 1
+  end
+
   # A DSL CLASSREF (one or multiple parts separated by '::' where (at least) the first part starts with an upper case letter).
   #
   class QualifiedReference < LiteralValue
@@ -498,7 +508,11 @@ module Puppet::Pops::Model
 
   # Epp start
   class EppExpression < Expression
-    has_attr 'see_scope', Boolean
+    # EPP can be specified without giving any parameter specification.
+    # However, the parameters of the lambda in that case are the empty
+    # array, which is the same as when the parameters are explicity
+    # specified as empty. This attribute tracks that difference.
+    has_attr 'parameters_specified', Boolean
     contains_one_uni 'body', Expression
   end
 

@@ -128,6 +128,9 @@ class Puppet::Pops::Parser::Lexer2
     "in"       => [:IN,       'in',       2],
     "unless"   => [:UNLESS,   'unless',   6],
     "function" => [:FUNCTION, 'function', 8],
+    "type"     => [:TYPE,     'type',     4],
+    "attr"     => [:ATTR,     'attr',     4],
+    "private"  => [:PRIVATE,  'private',  7],
   }
   KEYWORDS.each {|k,v| v[1].freeze; v.freeze }
   KEYWORDS.freeze
@@ -325,7 +328,7 @@ class Puppet::Pops::Parser::Lexer2
       emit(TOKEN_COMMA, before)
 
     when '['
-      if ctx[:after] == :NAME && (before == 0 || scn.string[before-1,1] =~ /[[:blank:]\r\n]+/)
+      if (before == 0 || scn.string[before-1,1] =~ /[[:blank:]\r\n]+/)
         emit(TOKEN_LISTSTART, before)
       else
         emit(TOKEN_LBRACK, before)

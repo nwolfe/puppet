@@ -39,7 +39,7 @@ Puppet::Type.newtype(:resources) do
 
   newparam(:unless_system_user) do
     desc "This keeps system users from being purged.  By default, it
-      does not purge users whose UIDs are less than or equal to 500, but you can specify
+      does not purge users whose UIDs are less than 500 or 1000, depending on operating system, but you can specify
       a different UID as the inclusive limit."
 
     newvalues(:true, :false, /^\d+$/)
@@ -49,7 +49,7 @@ Puppet::Type.newtype(:resources) do
       when /^\d+/
         Integer(value)
       when :true, true
-        500
+        @resource.system_users_max_uid
       when :false, false
         false
       when Integer; value
@@ -60,7 +60,7 @@ Puppet::Type.newtype(:resources) do
 
     defaultto {
       if @resource[:name] == "user"
-        500
+        @resource.system_users_max_uid
       else
         nil
       end
@@ -68,26 +68,24 @@ Puppet::Type.newtype(:resources) do
   end
 
   newparam(:unless_uid) do
-     desc "This keeps specific uids or ranges of uids from being purged when purge is true.
-       Accepts ranges, integers and (mixed) arrays of both."
+    desc 'This keeps specific uids or ranges of uids from being purged when purge is true.
+      Accepts integers, integer strings, and arrays of integers or integer strings.
+      To specify a range of uids, consider using the range() function from stdlib.'
 
-     munge do |value|
-       case value
-       when /^\d+/
-         [Integer(value)]
-       when Integer
-         [value]
-       when Range
-         [value]
-       when Array
-         value
-       when /^\[\d+/
-         value.split(',').collect{|x| x.include?('..') ? Integer(x.split('..')[0])..Integer(x.split('..')[1]) : Integer(x) }
-       else
-         raise ArgumentError, "Invalid value #{value.inspect}"
-       end
-     end
-   end
+    munge do |value|
+      value = [value] unless value.is_a? Array
+      value.flatten.collect do |v|
+        case v
+          when Integer
+            v
+          when String
+            Integer(v)
+          else
+            raise ArgumentError, "Invalid value #{v.inspect}."
+        end
+      end
+    end
+  end
 
   def check(resource)
     @checkmethod ||= "#{self[:name]}_check"
@@ -136,6 +134,13 @@ Puppet::Type.newtype(:resources) do
     @resource_type
   end
 
+  def self.deprecate_params(title,params)
+    return unless params
+    if title == 'cron' and ! params.select { |param| param.name.intern == :purge and param.value == true }.empty?
+      Puppet.deprecation_warning("Change notice: purging cron entries will be more aggressive in future versions, take care when updating your agents. See http://links.puppetlabs.com/puppet-aggressive-cron-purge")
+    end
+  end
+
   # Make sure we don't purge users with specific uids
   def user_check(resource)
     return true unless self[:name] == "user"
@@ -146,18 +151,21 @@ Puppet::Type.newtype(:resources) do
     unless_uids = self[:unless_uid]
 
     return false if system_users.include?(resource[:name])
-
-    if unless_uids && unless_uids.length > 0
-      unless_uids.each do |unless_uid|
-        return false if unless_uid == current_uid
-        return false if unless_uid.respond_to?('include?') && unless_uid.include?(current_uid)
-      end
-    end
+    return false if unless_uids && unless_uids.include?(current_uid)
 
     current_uid > self[:unless_system_user]
   end
 
   def system_users
     %w{root nobody bin noaccess daemon sys}
+  end
+
+  def system_users_max_uid
+    case Facter.value(:osfamily)
+    when 'Debian', 'OpenBSD', 'FreeBSD'
+      999
+    else
+      499
+    end
   end
 end

@@ -107,25 +107,25 @@ class Puppet::Parser::Compiler
       @catalog.environment_instance = environment
 
       # Set the client's parameters into the top scope.
-      Puppet::Util::Profiler.profile("Compile: Set node parameters") { set_node_parameters }
+      Puppet::Util::Profiler.profile("Compile: Set node parameters", [:compiler, :set_node_params]) { set_node_parameters }
 
-      Puppet::Util::Profiler.profile("Compile: Created settings scope") { create_settings_scope }
+      Puppet::Util::Profiler.profile("Compile: Created settings scope", [:compiler, :create_settings_scope]) { create_settings_scope }
 
       if is_binder_active?
         # create injector, if not already created - this is for 3x that does not trigger
         # lazy loading of injector via context
-        Puppet::Util::Profiler.profile("Compile: Created injector") { injector }
+        Puppet::Util::Profiler.profile("Compile: Created injector", [:compiler, :create_injector]) { injector }
       end
 
-      Puppet::Util::Profiler.profile("Compile: Evaluated main") { evaluate_main }
+      Puppet::Util::Profiler.profile("Compile: Evaluated main", [:compiler, :evaluate_main]) { evaluate_main }
 
-      Puppet::Util::Profiler.profile("Compile: Evaluated AST node") { evaluate_ast_node }
+      Puppet::Util::Profiler.profile("Compile: Evaluated AST node", [:compiler, :evaluate_ast_node]) { evaluate_ast_node }
 
-      Puppet::Util::Profiler.profile("Compile: Evaluated node classes") { evaluate_node_classes }
+      Puppet::Util::Profiler.profile("Compile: Evaluated node classes", [:compiler, :evaluate_node_classes]) { evaluate_node_classes }
 
-      Puppet::Util::Profiler.profile("Compile: Evaluated generators") { evaluate_generators }
+      Puppet::Util::Profiler.profile("Compile: Evaluated generators", [:compiler, :evaluate_generators]) { evaluate_generators }
 
-      Puppet::Util::Profiler.profile("Compile: Finished catalog") { finish }
+      Puppet::Util::Profiler.profile("Compile: Finished catalog", [:compiler, :finish_catalog]) { finish }
 
       fail_on_unevaluated
 
@@ -204,25 +204,25 @@ class Puppet::Parser::Compiler
       class_parameters = classes
       classes = classes.keys
     end
-    classes.each do |name|
-      # If we can find the class, then make a resource that will evaluate it.
-      if klass = scope.find_hostclass(name, :assume_fqname => fqname)
 
-        # If parameters are passed, then attempt to create a duplicate resource
-        # so the appropriate error is thrown.
-        if class_parameters
-          resource = klass.ensure_in_catalog(scope, class_parameters[name] || {})
-        else
-          next if scope.class_scope(klass)
-          resource = klass.ensure_in_catalog(scope)
-        end
+    hostclasses = classes.collect do |name|
+      scope.find_hostclass(name, :assume_fqname => fqname) or raise Puppet::Error, "Could not find class #{name} for #{node.name}"
+    end
 
-        # If they've disabled lazy evaluation (which the :include function does),
-        # then evaluate our resource immediately.
-        resource.evaluate unless lazy_evaluate
-      else
-        raise Puppet::Error, "Could not find class #{name} for #{node.name}"
+    if class_parameters
+      resources = ensure_classes_with_parameters(scope, hostclasses, class_parameters)
+      if !lazy_evaluate
+        resources.each(&:evaluate)
       end
+
+      resources
+    else
+      already_included, newly_included = ensure_classes_without_parameters(scope, hostclasses)
+      if !lazy_evaluate
+        newly_included.each(&:evaluate)
+      end
+
+      already_included + newly_included
     end
   end
 
@@ -299,6 +299,27 @@ class Puppet::Parser::Compiler
 
   private
 
+  def ensure_classes_with_parameters(scope, hostclasses, parameters)
+    hostclasses.collect do |klass|
+      klass.ensure_in_catalog(scope, parameters[klass.name] || {})
+    end
+  end
+
+  def ensure_classes_without_parameters(scope, hostclasses)
+    already_included = []
+    newly_included = []
+    hostclasses.each do |klass|
+      class_scope = scope.class_scope(klass)
+      if class_scope
+        already_included << class_scope.resource
+      else
+        newly_included << klass.ensure_in_catalog(scope)
+      end
+    end
+
+    [already_included, newly_included]
+  end
+
   # If ast nodes are enabled, then see if we can find and evaluate one.
   def evaluate_ast_node
     return unless ast_nodes?
@@ -331,7 +352,7 @@ class Puppet::Parser::Compiler
       # We have to iterate over a dup of the array because
       # collections can delete themselves from the list, which
       # changes its length and causes some collections to get missed.
-      Puppet::Util::Profiler.profile("Evaluated collections") do
+      Puppet::Util::Profiler.profile("Evaluated collections", [:compiler, :evaluate_collections]) do
         found_something = false
         @collections.dup.each do |collection|
           found_something = true if collection.evaluate
@@ -346,9 +367,9 @@ class Puppet::Parser::Compiler
   # evaluate_generators loop.
   def evaluate_definitions
     exceptwrap do
-      Puppet::Util::Profiler.profile("Evaluated definitions") do
+      Puppet::Util::Profiler.profile("Evaluated definitions", [:compiler, :evaluate_definitions]) do
         !unevaluated_resources.each do |resource|
-          Puppet::Util::Profiler.profile("Evaluated resource #{resource}") do
+          Puppet::Util::Profiler.profile("Evaluated resource #{resource}", [:compiler, :evaluate_resource, resource]) do
             resource.evaluate
           end
         end.empty?
@@ -365,7 +386,7 @@ class Puppet::Parser::Compiler
     loop do
       done = true
 
-      Puppet::Util::Profiler.profile("Iterated (#{count + 1}) on generators") do
+      Puppet::Util::Profiler.profile("Iterated (#{count + 1}) on generators", [:compiler, :iterate_on_generators]) do
         # Call collections first, then definitions.
         done = false if evaluate_collections
         done = false if evaluate_definitions

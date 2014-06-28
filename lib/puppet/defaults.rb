@@ -57,7 +57,39 @@ module Puppet
       :default    => 'notice',
       :type       => :enum,
       :values     => ["debug","info","notice","warning","err","alert","emerg","crit"],
-      :desc       => "Default logging level",
+      :desc       => "Default logging level for messages from Puppet. Allowed values are:
+
+        * debug
+        * info
+        * notice
+        * warning
+        * err
+        * alert
+        * emerg
+        * crit
+        ",
+    },
+    :disable_warnings => {
+      :default => [],
+      :type    => :array,
+      :desc    => "A comma-separated list of warning types to suppress. If large numbers
+        of warnings are making Puppet's logs too large or difficult to use, you
+        can temporarily silence them with this setting.
+
+        If you are preparing to upgrade Puppet to a new major version, you
+        should re-enable all warnings for a while.
+
+        Valid values for this setting are:
+
+        * `deprecations` --- disables deprecation warnings.",
+      :hook      => proc do |value|
+        values = munge(value)
+        valid   = %w[deprecations]
+        invalid = values - (values & valid)
+        if not invalid.empty?
+          raise ArgumentError, "Cannot disable unrecognized warning types #{invalid.inspect}. Valid values are #{valid.inspect}."
+        end
+      end
     }
   )
 
@@ -356,10 +388,12 @@ module Puppet
       a file (such as manifests or templates) has changed on disk. #{AS_DURATION}",
     },
     :environment_timeout => {
-      :default    => "5s",
+      :default    => "3m",
       :type       => :ttl,
-      :desc       => "The time to live for a cached environment. The time is either given #{AS_DURATION}, or
-      the word 'unlimited' which causes the environment to be cached until the master is restarted."
+      :desc       => "The time to live for a cached environment.
+      #{AS_DURATION}
+      This setting can also be set to `unlimited`, which causes the environment to
+      be cached until the master is restarted."
     },
     :queue_type => {
       :default    => "stomp",
@@ -414,6 +448,7 @@ module Puppet
       Setting a global value for config_version in puppet.conf is deprecated. Please set a
       per-environment value in environment.conf instead. For more info, see
       http://docs.puppetlabs.com/puppet/latest/reference/environments.html",
+      :deprecated => :allowed_on_commandline,
     },
     :zlib => {
         :default  => true,
@@ -477,8 +512,29 @@ module Puppet
     # We have to downcase the fqdn, because the current ssl stuff (as oppsed to in master) doesn't have good facilities for
     # manipulating naming.
     :certname => {
-      :default => Puppet::Settings.default_certname.downcase, :desc => "The name to use when handling certificates.  Defaults
-      to the fully qualified domain name.",
+      :default => Puppet::Settings.default_certname.downcase, :desc => "The name to use when handling certificates. When a node
+        requests a certificate from the CA puppet master, it uses the value of the
+        `certname` setting as its requested Subject CN.
+
+        This is the name used when managing a node's permissions in
+        [auth.conf](http://docs.puppetlabs.com/puppet/latest/reference/config_file_auth.html).
+        In most cases, it is also used as the node's name when matching
+        [node definitions](http://docs.puppetlabs.com/puppet/latest/reference/lang_node_definitions.html)
+        and requesting data from an ENC. (This can be changed with the `node_name_value`
+        and `node_name_fact` settings, although you should only do so if you have
+        a compelling reason.)
+
+        A node's certname is available in Puppet manifests as `$trusted['certname']`. (See
+        [Facts and Built-In Variables](http://docs.puppetlabs.com/puppet/latest/reference/lang_facts_and_builtin_vars.html)
+        for more details.)
+
+        * For best compatibility, you should limit the value of `certname` to
+          only use letters, numbers, periods, underscores, and dashes. (That is,
+          it should match `/\A[a-z0-9._-]+\Z/`.)
+        * The special value `ca` is reserved, and can't be used as the certname
+          for a normal node.
+
+        Defaults to the node's fully qualified domain name.",
       :call_hook => :on_define_and_write, # Call our hook with the default value, so we're always downcased
       :hook => proc { |value| raise(ArgumentError, "Certificate names must be lower case; see #1168") unless value == value.downcase }},
     :certdnsnames => {
@@ -897,7 +953,8 @@ EOT
       :type       => :directory,
       :desc       => "Used to build the default value of the `manifest` setting. Has no other purpose.
 
-        This setting is deprecated."
+        This setting is deprecated.",
+      :deprecated => :completely,
     },
     :manifest => {
       :default    => "$manifestdir/site.pp",
@@ -911,6 +968,7 @@ EOT
         environment's `manifests` directory as the main manifest, you can set
         `manifest` in environment.conf. For more info, see
         http://docs.puppetlabs.com/puppet/latest/reference/environments.html",
+      :deprecated => :allowed_on_commandline,
     },
     :code => {
       :default    => "",
@@ -998,6 +1056,7 @@ EOT
         default modulepath of `<ACTIVE ENVIRONMENT'S MODULES DIR>:$basemodulepath`,
         you can set `modulepath` in environment.conf. For more info, see
         http://docs.puppetlabs.com/puppet/latest/reference/environments.html",
+      :deprecated => :allowed_on_commandline,
     },
     :ssl_client_header => {
       :default    => "HTTP_X_CLIENT_DN",
@@ -1825,7 +1884,8 @@ EOT
         :desc     => "Where Puppet looks for template files.  Can be a list of colon-separated
           directories.
 
-          This setting is deprecated. Please put your templates in modules instead."
+          This setting is deprecated. Please put your templates in modules instead.",
+        :deprecated => :completely,
     },
 
     :allow_variables_with_dashes => {
@@ -1907,24 +1967,24 @@ EOT
      :default => 10,
      :desc => <<-'EOT'
        Sets the max number of logged/displayed parser validation errors in case
-       multiple errors have been detected. A value of 0 is the same as value 1.
-       The count is per manifest.
+       multiple errors have been detected. A value of 0 is the same as a value of 1; a
+       minimum of one error is always raised.  The count is per manifest.
      EOT
    },
    :max_warnings => {
      :default => 10,
      :desc => <<-'EOT'
        Sets the max number of logged/displayed parser validation warnings in
-       case multiple errors have been detected. A value of 0 is the same as
-       value 1. The count is per manifest.
+       case multiple warnings have been detected. A value of 0 blocks logging of
+       warnings.  The count is per manifest.
      EOT
      },
   :max_deprecations => {
     :default => 10,
     :desc => <<-'EOT'
       Sets the max number of logged/displayed parser validation deprecation
-      warnings in case multiple errors have been detected. A value of 0 is the
-      same as value 1. The count is per manifest.
+      warnings in case multiple deprecation warnings have been detected. A value of 0
+      blocks the logging of deprecation warnings.  The count is per manifest.
     EOT
     },
   :strict_variables => {

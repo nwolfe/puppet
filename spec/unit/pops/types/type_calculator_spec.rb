@@ -78,8 +78,8 @@ describe 'The type calculator' do
     Puppet::Pops::Types::TypeFactory.struct(type_hash)
   end
 
-  def optional_object_t
-    Puppet::Pops::Types::TypeFactory.optional_object()
+  def object_t
+    Puppet::Pops::Types::TypeFactory.any()
   end
 
   def types
@@ -89,7 +89,7 @@ describe 'The type calculator' do
   shared_context "types_setup" do
 
     def all_types
-      [ Puppet::Pops::Types::PObjectType,
+      [ Puppet::Pops::Types::PAnyType,
         Puppet::Pops::Types::PNilType,
         Puppet::Pops::Types::PDataType,
         Puppet::Pops::Types::PScalarType,
@@ -111,6 +111,7 @@ describe 'The type calculator' do
         Puppet::Pops::Types::PStructType,
         Puppet::Pops::Types::PTupleType,
         Puppet::Pops::Types::PCallableType,
+        Puppet::Pops::Types::PType,
       ]
     end
 
@@ -278,8 +279,8 @@ describe 'The type calculator' do
         calculator.infer(['one', /two/]).element_type.class.should == Puppet::Pops::Types::PScalarType
       end
 
-      it 'with string and symbol values translates to PArrayType[PObjectType]' do
-        calculator.infer(['one', :two]).element_type.class.should == Puppet::Pops::Types::PObjectType
+      it 'with string and symbol values translates to PArrayType[PAnyType]' do
+        calculator.infer(['one', :two]).element_type.class.should == Puppet::Pops::Types::PAnyType
       end
 
       it 'with fixnum and nil values translates to PArrayType[PIntegerType]' do
@@ -493,13 +494,13 @@ describe 'The type calculator' do
 
     context "for Object, such that" do
       it 'all types are assignable to Object' do
-        t = Puppet::Pops::Types::PObjectType.new()
+        t = Puppet::Pops::Types::PAnyType.new()
         all_types.each { |t2| t2.new.should be_assignable_to(t) }
       end
 
       it 'Object is not assignable to anything but Object' do
-        tested_types = all_types() - [Puppet::Pops::Types::PObjectType]
-        t = Puppet::Pops::Types::PObjectType.new()
+        tested_types = all_types() - [Puppet::Pops::Types::PAnyType]
+        t = Puppet::Pops::Types::PAnyType.new()
         tested_types.each { |t2| t.should_not be_assignable_to(t2.new) }
       end
     end
@@ -530,7 +531,7 @@ describe 'The type calculator' do
       end
 
       it 'Data is not assignable to any disjunct type' do
-        tested_types = all_types - [Puppet::Pops::Types::PObjectType, Puppet::Pops::Types::PDataType] - scalar_types
+        tested_types = all_types - [Puppet::Pops::Types::PAnyType, Puppet::Pops::Types::PDataType] - scalar_types
         t = Puppet::Pops::Types::PDataType.new()
         tested_types.each {|t2| t.should_not be_assignable_to(t2.new) }
       end
@@ -549,7 +550,7 @@ describe 'The type calculator' do
       end
 
       it 'Scalar is not assignable to any disjunct type' do
-        tested_types = all_types - [Puppet::Pops::Types::PObjectType, Puppet::Pops::Types::PDataType] - scalar_types
+        tested_types = all_types - [Puppet::Pops::Types::PAnyType, Puppet::Pops::Types::PDataType] - scalar_types
         t = Puppet::Pops::Types::PScalarType.new()
         tested_types.each {|t2| t.should_not be_assignable_to(t2.new) }
       end
@@ -569,7 +570,7 @@ describe 'The type calculator' do
 
       it 'Numeric is not assignable to any disjunct type' do
         tested_types = all_types - [
-          Puppet::Pops::Types::PObjectType,
+          Puppet::Pops::Types::PAnyType,
           Puppet::Pops::Types::PDataType,
           Puppet::Pops::Types::PScalarType,
           ] - numeric_types
@@ -591,7 +592,7 @@ describe 'The type calculator' do
       end
 
       it 'Collection is not assignable to any disjunct type' do
-        tested_types = all_types - [Puppet::Pops::Types::PObjectType] - collection_types
+        tested_types = all_types - [Puppet::Pops::Types::PAnyType] - collection_types
         t = Puppet::Pops::Types::PCollectionType.new()
         tested_types.each {|t2| t.should_not be_assignable_to(t2.new) }
       end
@@ -609,7 +610,7 @@ describe 'The type calculator' do
 
       it 'Array is not assignable to any disjunct type' do
         tested_types = all_types - [
-          Puppet::Pops::Types::PObjectType,
+          Puppet::Pops::Types::PAnyType,
           Puppet::Pops::Types::PDataType] - collection_types
         t = Puppet::Pops::Types::PArrayType.new()
         tested_types.each {|t2| t.should_not be_assignable_to(t2.new) }
@@ -628,7 +629,7 @@ describe 'The type calculator' do
 
       it 'Hash is not assignable to any disjunct type' do
         tested_types = all_types - [
-          Puppet::Pops::Types::PObjectType,
+          Puppet::Pops::Types::PAnyType,
           Puppet::Pops::Types::PDataType] - collection_types
         t = Puppet::Pops::Types::PHashType.new()
         tested_types.each {|t2| t.should_not be_assignable_to(t2.new) }
@@ -647,7 +648,7 @@ describe 'The type calculator' do
 
       it 'Tuple is not assignable to any disjunct type' do
         tested_types = all_types - [
-          Puppet::Pops::Types::PObjectType,
+          Puppet::Pops::Types::PAnyType,
           Puppet::Pops::Types::PDataType] - collection_types
         t = Puppet::Pops::Types::PTupleType.new()
         tested_types.each {|t2| t.should_not be_assignable_to(t2.new) }
@@ -666,7 +667,7 @@ describe 'The type calculator' do
 
       it 'Struct is not assignable to any disjunct type' do
         tested_types = all_types - [
-          Puppet::Pops::Types::PObjectType,
+          Puppet::Pops::Types::PAnyType,
           Puppet::Pops::Types::PDataType] - collection_types
         t = Puppet::Pops::Types::PStructType.new()
         tested_types.each {|t2| t.should_not be_assignable_to(t2.new) }
@@ -678,7 +679,7 @@ describe 'The type calculator' do
         t = Puppet::Pops::Types::PCallableType.new()
         tested_types = all_types - [
           Puppet::Pops::Types::PCallableType,
-          Puppet::Pops::Types::PObjectType]
+          Puppet::Pops::Types::PAnyType]
         tested_types.each {|t2| t.should_not be_assignable_to(t2.new) }
       end
     end
@@ -796,6 +797,23 @@ describe 'The type calculator' do
     end
 
     context 'when dealing with tuples' do
+      it 'matches empty tuples' do
+        tuple1 = tuple_t()
+        tuple2 = tuple_t()
+
+        calculator.assignable?(tuple1, tuple2).should == true
+        calculator.assignable?(tuple2, tuple1).should == true
+      end
+
+      it 'accepts an empty tuple as assignable to a tuple with a min size of 0' do
+        tuple1 = tuple_t(Object)
+        factory.constrain_size(tuple1, 0, :default)
+        tuple2 = tuple_t()
+
+        calculator.assignable?(tuple1, tuple2).should == true
+        calculator.assignable?(tuple2, tuple1).should == false
+      end
+
       it 'should accept matching tuples' do
         tuple1 = tuple_t(1,2)
         tuple2 = tuple_t(Integer,Integer)
@@ -858,6 +876,17 @@ describe 'The type calculator' do
         factory.constrain_size(array, 2, 2)
         calculator.assignable?(tuple1, array).should == true
         calculator.assignable?(array, tuple1).should == true
+      end
+
+      it 'should accept empty array when tuple allows min of 0' do
+        tuple1 = tuple_t(Integer)
+        factory.constrain_size(tuple1, 0, 1)
+
+        array = array_t(Integer)
+        factory.constrain_size(array, 0, 0)
+
+        calculator.assignable?(tuple1, array).should == true
+        calculator.assignable?(array, tuple1).should == false
       end
     end
 
@@ -962,12 +991,12 @@ describe 'The type calculator' do
 
     it 'should consider undef to be instance of Object and NilType' do
       calculator.instance?(Puppet::Pops::Types::PNilType.new(), nil).should    == true
-      calculator.instance?(Puppet::Pops::Types::PObjectType.new(), nil).should == true
+      calculator.instance?(Puppet::Pops::Types::PAnyType.new(), nil).should == true
     end
 
     it 'should not consider undef to be an instance of any other type than Object and NilType and Data' do
       types_to_test = all_types - [ 
-        Puppet::Pops::Types::PObjectType,
+        Puppet::Pops::Types::PAnyType,
         Puppet::Pops::Types::PNilType,
         Puppet::Pops::Types::PDataType]
 
@@ -1119,10 +1148,8 @@ describe 'The type calculator' do
         the_block = factory.LAMBDA(params,factory.literal(42))
         the_closure = Puppet::Pops::Evaluator::Closure.new(:fake_evaluator, the_block, :fake_scope)
         expect(calculator.instance?(all_callables_t, the_closure)).to be_true
-        # TODO: lambdas are currently unttypes, anything can be given if arg count is correct
-        expect(calculator.instance?(callable_t(optional_object_t), the_closure)).to be_true
-        # Arg count is wrong
-        expect(calculator.instance?(callable_t(optional_object_t, optional_object_t), the_closure)).to be_false
+        expect(calculator.instance?(callable_t(object_t), the_closure)).to be_true
+        expect(calculator.instance?(callable_t(object_t, object_t), the_closure)).to be_false
       end
 
       it 'a Function instance should be considered a Callable' do
@@ -1192,8 +1219,8 @@ describe 'The type calculator' do
       calculator.string(Puppet::Pops::Types::PType.new()).should == 'Type'
     end
 
-    it 'should yield \'Object\' for PObjectType' do
-      calculator.string(Puppet::Pops::Types::PObjectType.new()).should == 'Object'
+    it 'should yield \'Object\' for PAnyType' do
+      calculator.string(Puppet::Pops::Types::PAnyType.new()).should == 'Any'
     end
 
     it 'should yield \'Scalar\' for PScalarType' do

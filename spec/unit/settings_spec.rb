@@ -674,7 +674,7 @@ describe Puppet::Settings do
         @settings.send(:parse_config_files)
         expect(@settings.value(:manifestdir)).to eq("/somewhere/production/manifests")
       end
- 
+
       it "interpolates the set environment when no environment specified" do
         text = <<-EOF
 [main]
@@ -1003,102 +1003,95 @@ describe Puppet::Settings do
     end
 
     describe "deprecations" do
-      context "in puppet.conf" do
+      let(:settings) { Puppet::Settings.new }
+      let(:app_defaults) {
+        {
+          :logdir     => "/dev/null",
+          :confdir    => "/dev/null",
+          :vardir     => "/dev/null",
+        }
+      }
 
-        def assert_puppet_conf_deprecation(setting, matches)
-          Puppet.expects(:deprecation_warning).with(regexp_matches(matches), anything)
+      def assert_accessing_setting_is_deprecated(settings, setting)
+        Puppet.expects(:deprecation_warning).with("Accessing '#{setting}' as a setting is deprecated. See http://links.puppetlabs.com/env-settings-deprecations")
+        Puppet.expects(:deprecation_warning).with("Modifying '#{setting}' as a setting is deprecated. See http://links.puppetlabs.com/env-settings-deprecations")
+        settings[setting.intern] = apath = File.expand_path('foo')
+        expect(settings[setting.intern]).to eq(apath)
+      end
 
-          val = "/you/can/set/this/but/will/get/warning"
-          text = "[main]
-          #{setting}=#{val}
-          "
-          Puppet.settings.parse_config(text)
+      before(:each) do
+        settings.define_settings(:main, {
+          :logdir => { :default => 'a', :desc => 'a' },
+          :confdir => { :default => 'b', :desc => 'b' },
+          :vardir => { :default => 'c', :desc => 'c' },
+        })
+      end
+
+      context "complete" do
+        let(:completely_deprecated_settings) do
+          settings.define_settings(:main, {
+            :manifestdir => {
+              :default => 'foo',
+              :desc    => 'a deprecated setting',
+              :deprecated => :completely,
+            }
+          })
+          settings
         end
 
-        it "warns when manifest is set" do
-          assert_puppet_conf_deprecation('manifest', /manifest.*puppet.conf/)
+        it "warns when set in puppet.conf" do
+          Puppet.expects(:deprecation_warning).with(regexp_matches(/manifestdir is deprecated\./), 'setting-manifestdir')
+
+          completely_deprecated_settings.parse_config(<<-CONF)
+            manifestdir='should warn'
+          CONF
+          completely_deprecated_settings.initialize_app_defaults(app_defaults)
         end
 
-        it "warns when modulepath is set" do
-          assert_puppet_conf_deprecation('modulepath', /modulepath.*puppet.conf/)
+        it "warns when set on the commandline" do
+          Puppet.expects(:deprecation_warning).with(regexp_matches(/manifestdir is deprecated\./), 'setting-manifestdir')
+
+          args = ["--manifestdir", "/some/value"]
+          completely_deprecated_settings.send(:parse_global_options, args)
+          completely_deprecated_settings.initialize_app_defaults(app_defaults)
         end
 
-        it "warns when config_version is set" do
-          assert_puppet_conf_deprecation('config_version', /config_version.*puppet.conf/)
-        end
-
-        it "warns when manifestdir is set" do
-          assert_puppet_conf_deprecation('manifestdir', /Setting manifestdir.*is.*deprecated/)
-        end
-
-        it "warns when templatedir is set" do
-          assert_puppet_conf_deprecation('templatedir', /Setting templatedir.*is.*deprecated/)
+        it "warns when set in code" do
+          assert_accessing_setting_is_deprecated(completely_deprecated_settings, 'manifestdir')
         end
       end
 
-      context "on the command line" do
-        def assert_command_line_deprecation(setting, message)
-          Puppet.expects(:deprecation_warning).with(message, anything)
-
-          args = ["--#{setting}", "/some/value"]
-          Puppet.settings.send(:parse_global_options, args)
+      context "partial" do
+        let(:partially_deprecated_settings) do
+          settings.define_settings(:main, {
+            :modulepath => {
+              :default => 'foo',
+              :desc    => 'a partially deprecated setting',
+              :deprecated => :allowed_on_commandline,
+            }
+          })
+          settings
         end
 
-        def assert_command_line_not_deprecated(setting)
-          Puppet.expects(:deprecation_warning).never
-
-          args = ["--#{setting}", "/some/value"]
-          Puppet.settings.send(:parse_global_options, args)
+        it "warns for a deprecated setting allowed on the command line set in puppet.conf" do
+          Puppet.expects(:deprecation_warning).with(regexp_matches(/modulepath is deprecated in puppet\.conf/), 'puppet-conf-setting-modulepath')
+          partially_deprecated_settings.parse_config(<<-CONF)
+            modulepath='should warn'
+          CONF
+          partially_deprecated_settings.initialize_app_defaults(app_defaults)
         end
 
         it "does not warn when manifest is set on command line" do
-          assert_command_line_not_deprecated('manifest')
+          Puppet.expects(:deprecation_warning).never
+
+          args = ["--modulepath", "/some/value"]
+          partially_deprecated_settings.send(:parse_global_options, args)
+          partially_deprecated_settings.initialize_app_defaults(app_defaults)
         end
 
-        it "does not warn when modulepath is set on command line" do
-          assert_command_line_not_deprecated('modulepath')
+        it "warns when set in code" do
+          assert_accessing_setting_is_deprecated(partially_deprecated_settings, 'modulepath')
         end
-
-        it "does not warn when config_version is set on command line" do
-          assert_command_line_not_deprecated('config_version')
-        end
-
-        it "warns when manifestdir is set on command line" do
-          assert_command_line_deprecation('manifestdir', "Setting manifestdir is deprecated. See http://links.puppetlabs.com/env-settings-deprecations")
-        end
-
-        it "warns when templatedir is set on command line" do
-          assert_command_line_deprecation('templatedir', "Setting templatedir is deprecated. See http://links.puppetlabs.com/env-settings-deprecations")
-        end
-      end
-
-      context "as settings in the code base" do
-        def assert_accessing_setting_is_deprecated(setting)
-          Puppet.expects(:deprecation_warning).with("Accessing '#{setting}' as a setting is deprecated. See http://links.puppetlabs.com/env-settings-deprecations")
-          Puppet.expects(:deprecation_warning).with("Modifying '#{setting}' as a setting is deprecated. See http://links.puppetlabs.com/env-settings-deprecations")
-          Puppet[setting.intern] = apath = File.expand_path('foo')
-          expect(Puppet[setting.intern]).to eq(apath)
-        end
-
-        it "warns when attempt to access a 'manifest' setting" do
-          assert_accessing_setting_is_deprecated('manifest')
-        end
-
-        it "warns when attempt to access a 'modulepath' setting" do
-          assert_accessing_setting_is_deprecated('modulepath')
-        end
-        it "warns when attempt to access a 'config_version' setting" do
-          assert_accessing_setting_is_deprecated('config_version')
-        end
-
-        it "warns when attempt to access a 'manifestdir' setting" do
-          assert_accessing_setting_is_deprecated('manifestdir')
-        end
-
-        it "warns when attempt to access a 'templatedir' setting" do
-          assert_accessing_setting_is_deprecated('templatedir')
-        end
-
       end
     end
   end
@@ -1363,6 +1356,44 @@ describe Puppet::Settings do
       it "it should not add users and groups to the catalog" do
         @catalog.resource(:user, "suser").should be_nil
         @catalog.resource(:group, "sgroup").should be_nil
+      end
+    end
+
+    describe "adding default directory environment to the catalog" do
+      let(:tmpenv) { tmpdir("envs") }
+      let(:default_path) { "#{tmpenv}/environments" }
+      before(:each) do
+        @settings.define_settings :main,
+          :environment     => { :default => "production", :desc => "env"},
+          :environmentpath => { :type => :path, :default => default_path, :desc => "envpath"}
+      end
+
+      it "adds if environmentpath exists" do
+        envpath = "#{tmpenv}/custom_envpath"
+        @settings[:environmentpath] = envpath
+        Dir.mkdir(envpath)
+        catalog = @settings.to_catalog
+        expect(catalog.resource_keys).to include(["File", "#{envpath}/production"])
+      end
+
+      it "adds the first directory of environmentpath" do
+        envdir = "#{tmpenv}/custom_envpath"
+        envpath = "#{envdir}#{File::PATH_SEPARATOR}/some/other/envdir"
+        @settings[:environmentpath] = envpath
+        Dir.mkdir(envdir)
+        catalog = @settings.to_catalog
+        expect(catalog.resource_keys).to include(["File", "#{envdir}/production"])
+      end
+
+      it "handles a non-existent environmentpath" do
+        catalog = @settings.to_catalog
+        expect(catalog.resource_keys).to be_empty
+      end
+
+      it "handles a default environmentpath" do
+        Dir.mkdir(default_path)
+        catalog = @settings.to_catalog
+        expect(catalog.resource_keys).to include(["File", "#{default_path}/production"])
       end
     end
 

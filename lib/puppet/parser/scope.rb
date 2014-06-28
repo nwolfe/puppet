@@ -30,6 +30,9 @@ class Puppet::Parser::Scope
   attr_accessor :parent
   attr_reader :namespaces
 
+  # Hash of hashes of default values per type name
+  attr_reader :defaults
+
   # Add some alias methods that forward to the compiler, since we reference
   # them frequently enough to justify the extra method call.
   def_delegators :compiler, :catalog, :environment
@@ -322,6 +325,17 @@ class Puppet::Parser::Scope
   # it collects all of the defaults, with defaults in closer scopes
   # overriding those in later scopes.
   def lookupdefaults(type)
+    if Puppet[:parser] == 'future'
+      lookupdefaults_4x(type)
+    else
+      lookupdefaults_3x(type)
+    end
+  end
+
+  # The implemetation for lookupdefaults for 3x where the order is:
+  # inherited, contained (recursive), self
+  #
+  def lookupdefaults_3x(type)
     values = {}
 
     # first collect the values from the parents
@@ -340,6 +354,35 @@ class Puppet::Parser::Scope
     end
 
     values
+  end
+
+  # The implementation for lookupdefaults for 4x where the order is:
+  # inherited-scope, closure-scope, self
+  #
+  def lookupdefaults_4x(type)
+    # This is an optimized version that avoids method calls and garbage creation
+    # Build array with scopes from most significant to least significant
+    influencing_scopes = [self]
+    is = inherited_scope
+    while is do
+      influencing_scopes << is
+      is = is.inherited_scope
+    end
+
+    es = enclosing_scope
+    while es do
+      influencing_scopes << es
+      es = es.enclosing_scope
+    end
+
+    # apply from least significant, to most significant
+    influencing_scopes.reverse.reduce({}) do | values, scope |
+      scope_defaults = scope.defaults
+      if scope_defaults.include?(type)
+        values.merge!(scope_defaults[type])
+      end
+      values
+    end
   end
 
   # Look up a defined type.
@@ -826,7 +869,60 @@ class Puppet::Parser::Scope
     return [type, titles]
   end
 
+  # Transforms references to classes to the form suitable for
+  # lookup in the compiler.
+  #
+  # Makes names passed in the names array absolute if they are relative
+  # Names are now made absolute if Puppet[:parser] == 'future', this will
+  # be the default behavior in Puppet 4.0
+  #
+  # Transforms Class[] and Resource[] type referenes to class name
+  # or raises an error if a Class[] is unspecific, if a Resource is not
+  # a 'class' resource, or if unspecific (no title).
+  #
+  # TODO: Change this for 4.0 to always make names absolute
+  #
+  # @param names [Array<String>] names to (optionally) make absolute
+  # @return [Array<String>] names after transformation
+  #
+  def transform_and_assert_classnames(names)
+    if Puppet[:parser] == 'future'
+      names.map do |name|
+        case name
+        when String
+          name.sub(/^([^:]{1,2})/, '::\1')
+
+        when Puppet::Resource
+          assert_class_and_title(name.type, name.title)
+          name.title.sub(/^([^:]{1,2})/, '::\1')
+
+        when Puppet::Pops::Types::PHostClassType
+          raise ArgumentError, "Cannot use an unspecific Class[] Type" unless name.class_name
+          name.class_name.sub(/^([^:]{1,2})/, '::\1')
+
+        when Puppet::Pops::Types::PResourceType
+          assert_class_and_title(name.type_name, name.title)
+          name.title.sub(/^([^:]{1,2})/, '::\1')
+        end
+      end
+    else
+      names
+    end
+  end
+
   private
+
+  def assert_class_and_title(type_name, title)
+    if type_name.nil? || type_name == ''
+      raise ArgumentError, "Cannot use an unspecific Resource[] where a Resource['class', name] is expected"
+    end
+    unless type_name =~ /^[Cc]lass$/
+      raise ArgumentError, "Cannot use a Resource[#{type_name}] where a Resource['class', name] is expected"
+    end
+    if title.nil?
+      raise ArgumentError, "Cannot use an unspecific Resource['class'] where a Resource['class', name] is expected"
+    end
+  end
 
   def extend_with_functions_module
     root = Puppet.lookup(:root_environment)

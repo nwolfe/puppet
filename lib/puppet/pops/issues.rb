@@ -418,8 +418,20 @@ module Puppet::Pops::Issues
     "Unacceptable name. The name '#{name}' is unacceptable as the name of #{label.a_an(semantic)}"
   end
 
-  NON_NAMESPACED_FUNCTION = hard_issue :NON_NAMESPACED_FUNCTION, :name do
-    "A Puppet Function must be defined within a module name-space. The name '#{name}' is unacceptable."
+  CAPTURES_REST_NOT_LAST = hard_issue :CAPTURES_REST_NOT_LAST, :param_name do
+    "Parameter $#{param_name} is not last, and has 'captures rest'"
+  end
+
+  CAPTURES_REST_NOT_SUPPORTED = hard_issue :CAPTURES_REST_NOT_SUPPORTED, :container, :param_name do
+    "Parameter $#{param_name} has 'captures rest' - not supported in #{label.a_an(container)}"
+  end
+
+  REQUIRED_PARAMETER_AFTER_OPTIONAL = hard_issue :REQUIRED_PARAMETER_AFTER_OPTIONAL, :param_name do
+    "Parameter $#{param_name} is required but appears after optional parameters"
+  end
+
+  MISSING_REQUIRED_PARAMETER = hard_issue :MISSING_REQUIRED_PARAMETER, :param_name do
+    "Parameter $#{param_name} is required but no value was given"
   end
 
   NOT_NUMERIC = issue :NOT_NUMERIC, :value do
@@ -469,5 +481,25 @@ module Puppet::Pops::Issues
 
   DISCONTINUED_IMPORT = hard_issue :DISCONTINUED_IMPORT do
     "Use of 'import' has been discontinued in favor of a manifest directory. See http://links.puppetlabs.com/puppet-import-deprecation"
+  end
+
+  IDEM_EXPRESSION_NOT_LAST = issue :IDEM_EXPRESSION_NOT_LAST do
+    "This #{label.label(semantic)} is not productive. A non productive construct may only be placed last in a block/sequence"
+  end
+
+  IDEM_NOT_ALLOWED_LAST = hard_issue :IDEM_NOT_ALLOWED_LAST, :container do
+    "This #{label.label(semantic)} is not productive. #{label.a_an_uc(container)} can not end with a non productive construct"
+  end
+
+  RESERVED_WORD = hard_issue :RESERVED_WORD, :word do
+    "Use of reserved word: #{word}, must be quoted if intended to be a String value"
+  end
+
+  UNMATCHED_SELECTOR = hard_issue :UNMATCHED_SELECTOR, :param_value do
+    "No matching entry for selector parameter with value '#{param_value}'"
+  end
+
+  ILLEGAL_NODE_INHERITANCE = issue :ILLEGAL_NODE_INHERITANCE do
+    "Node inheritance is not supported in Puppet >= 4.0.0. See http://links.puppetlabs.com/puppet-node-inheritance-deprecation"
   end
 end

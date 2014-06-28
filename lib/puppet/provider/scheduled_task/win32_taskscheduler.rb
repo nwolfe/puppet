@@ -2,7 +2,6 @@ require 'puppet/parameter'
 
 if Puppet.features.microsoft_windows?
   require 'win32/taskscheduler'
-  require 'puppet/util/adsi'
 end
 
 Puppet::Type.type(:scheduled_task).provide(:win32_taskscheduler) do
@@ -125,7 +124,7 @@ Puppet::Type.type(:scheduled_task).provide(:win32_taskscheduler) do
 
     # By comparing account SIDs we don't have to worry about case
     # sensitivity, or canonicalization of the account name.
-    Puppet::Util::Windows::Security.name_to_sid(current) == Puppet::Util::Windows::Security.name_to_sid(should[0])
+    Puppet::Util::Windows::SID.name_to_sid(current) == Puppet::Util::Windows::SID.name_to_sid(should[0])
   end
 
   def trigger_insync?(current, should)
@@ -202,7 +201,7 @@ Puppet::Type.type(:scheduled_task).provide(:win32_taskscheduler) do
   end
 
   def user=(value)
-    self.fail("Invalid user: #{value}") unless Puppet::Util::Windows::Security.name_to_sid(value)
+    self.fail("Invalid user: #{value}") unless Puppet::Util::Windows::SID.name_to_sid(value)
 
     if value.to_s.downcase != 'system'
       task.set_account_information(value, resource[:password])

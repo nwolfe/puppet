@@ -64,7 +64,7 @@ WARNING: RDoc support is only available under Ruby 1.8.7 and earlier.
 
 USAGE
 -----
-puppet doc [-a|--all] [-h|--help] [-o|--outputdir <rdoc-outputdir>]
+puppet doc [-a|--all] [-h|--help] [-l|--list] [-o|--outputdir <rdoc-outputdir>]
   [-m|--mode text|pdf|rdoc] [-r|--reference <reference-name>]
   [--charset <charset>] [<manifest-file>]
 
@@ -164,16 +164,16 @@ HELP
   end
 
   def run_command
-    return[:rdoc].include?(options[:mode]) ? send(options[:mode]) : other
+    return [:rdoc].include?(options[:mode]) ? send(options[:mode]) : other
   end
 
   def rdoc
     exit_code = 0
     files = []
     unless @manifest
-      env = Puppet.lookup(:environments).get(Puppet[:environment])
+      env = Puppet.lookup(:current_environment)
       files += env.modulepath
-      files << ::File.dirname(env.manifest)
+      files << ::File.dirname(env.manifest) if env.manifest != Puppet::Node::Environment::NO_MANIFEST
     end
     files += command_line.args
     Puppet.info "scanning: #{files.inspect}"

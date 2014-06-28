@@ -182,6 +182,10 @@ class Puppet::Pops::Model::ModelTreeDumper < Puppet::Pops::Model::TreeDumper
     ['-', do_dump(o.expr)]
   end
 
+  def dump_UnfoldExpression o
+    ['unfold', do_dump(o.expr)]
+  end
+
   def dump_BlockExpression o
     ["block"] + o.statements.collect {|x| do_dump(x) }
   end
@@ -246,11 +250,20 @@ class Puppet::Pops::Model::ModelTreeDumper < Puppet::Pops::Model::TreeDumper
     result
   end
 
+  def dump_ReservedWord o
+    [ 'reserved', o.word ]
+  end
+
   # Produces parameters as name, or (= name value)
   def dump_Parameter o
-    name_part = "#{o.name}"
-    if o.value
+    name_prefix = o.captures_rest ? '*' : ''
+    name_part = "#{name_prefix}#{o.name}"
+    if o.value && o.type_expr
+      ["=t", do_dump(o.type_expr), name_part, do_dump(o.value)]
+    elsif o.value
       ["=", name_part, do_dump(o.value)]
+    elsif o.type_expr
+      ["t", do_dump(o.type_expr), name_part]
     else
       name_part
     end
