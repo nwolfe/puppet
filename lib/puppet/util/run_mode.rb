@@ -38,6 +38,10 @@ module Puppet
         "$vardir/log"
       end
 
+      def conf_dir
+        "$puppetdir/config"
+      end
+
       private
 
       ##
@@ -54,7 +58,7 @@ module Puppet
     end
 
     class UnixRunMode < RunMode
-      def conf_dir
+      def puppet_dir
         which_dir("/etc/puppetlabs/agent", "~/.puppet")
       end
 
@@ -75,7 +79,7 @@ module Puppet
     end
 
     class WindowsRunMode < RunMode
-      def conf_dir
+      def puppet_dir
         which_dir(File.join(windows_common_base("etc")), "~/.puppet")
       end
 
@@ -83,7 +87,7 @@ module Puppet
         which_dir(File.join(windows_common_base("var")), "~/.puppet/var")
       end
 
-    private
+      private
 
       def windows_common_base(*extra)
         [Dir::COMMON_APPDATA, "PuppetLabs", "puppet"] + extra
