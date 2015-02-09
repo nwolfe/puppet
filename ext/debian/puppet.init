@@ -49,42 +49,15 @@ stop_puppet_agent() {
     rm -f "$PIDFILE"
 }
 
+restart_puppet_agent() {
+    log_begin_msg "Restarting $DESC"
+    stop_puppet_agent
+    start_puppet_agent
+    log_end_msg $?
+}
+
 status_puppet_agent() {
-    if (type status_of_proc > /dev/null 2>&1) ; then
-        status_of_proc -p "${PIDFILE}" "${DAEMON}" "${NAME}"
-    else
-        status_of_proc() {
-            local pidfile daemon name status
-
-            pidfile=
-            OPTIND=1
-            while getopts p: opt ; do
-                case "$opt" in
-                    p)  pidfile="$OPTARG";;
-                esac
-            done
-            shift $(($OPTIND - 1))
-
-            if [ -n "$pidfile" ]; then
-                pidfile="-p $pidfile"
-            fi
-            daemon="$1"
-            name="$2"
-            status="0"
-            pidofproc $pidfile $daemon >/dev/null || status="$?"
-            if [ "$status" = 0 ]; then
-                log_success_msg "$name is running"
-                return 0
-            elif [ "$status" = 4 ]; then
-                log_failure_msg "could not access PID file for $name"
-                return $status
-            else
-                log_failure_msg "$name is not running"
-                return $status
-            fi
-        }
-        status_of_proc -p "${PIDFILE}" "${DAEMON}" "${NAME}"
-    fi
+    status_of_proc -p "${PIDFILE}" "${DAEMON}" "${NAME}"
 }
 
 case "$1" in
@@ -107,10 +80,12 @@ case "$1" in
         status_puppet_agent
     ;;
     restart|force-reload)
-        log_begin_msg "Restarting $DESC"
-        stop_puppet_agent
-        start_puppet_agent
-        log_end_msg $?
+        restart_puppet_agent
+    ;;
+    condrestart)
+        if status_puppet_agent >/dev/null 2>&1; then
+            restart_puppet_agent
+        fi
     ;;
     *)
         echo "Usage: $0 {start|stop|status|restart|force-reload|reload}" >&2
